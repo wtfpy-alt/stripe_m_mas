@@ -87,8 +87,11 @@ def run_checkout(cc: str, target_url: str, headless: bool = True, attempts: int 
                     headless=headless,
                     args=[
                         "--no-sandbox",
+                        "--disable-setuid-sandbox",
                         "--disable-dev-shm-usage",
-                        "--disable-gpu"
+                        "--disable-gpu",
+                        "--single-process",
+                        "--no-zygote"
                     ]
                 )
 
