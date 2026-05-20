@@ -45,10 +45,13 @@ async def razorpay(auth: str = Query(...), cc: str = Query(...)):
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
 
-    host = os.environ.get("HOST", "127.0.0.1")
-    port = int(os.environ.get("PORT", "8000"))
-    uvicorn.run("app:app", host=host, port=port, log_level="info")
+    uvicorn.run(
+        "app:app",
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 10000))
+    )
 
 
