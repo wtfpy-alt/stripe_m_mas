@@ -82,14 +82,24 @@ def run_checkout(cc: str, target_url: str, headless: bool = True, attempts: int 
             
             with sync_playwright() as p:
                 _emit_event(event_id, "🌐 Launching browser...", "step")
-                browser = p.chromium.launch(headless=headless, args=["--no-sandbox"])
+
+                browser = p.chromium.launch(
+                    headless=headless,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-gpu"
+                    ]
+                )
+
                 context = browser.new_context(
                     user_agent=(
-                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/116.0.0.0 Safari/537.36"
+                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
                     ),
                     locale="en-US",
                 )
+
                 page = context.new_page()
                 page.set_default_timeout(15000)
 
