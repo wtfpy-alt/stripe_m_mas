@@ -9,6 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install Playwright browsers explicitly
 RUN python -m playwright install chromium
 
+RUN playwright install
+
 COPY . .
 
 ENV PYTHONUNBUFFERED=1
