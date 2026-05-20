@@ -40,7 +40,7 @@ async def razorpay(auth: str = Query(...), cc: str = Query(...)):
 
     # Run the Playwright automation in a thread to avoid blocking
     # headless=False so you can watch the browser
-    result = await asyncio.to_thread(run_checkout, cc, TARGET_URL, False, 3, None)
+    result = await asyncio.to_thread(run_checkout, cc, TARGET_URL, True, 3, None)
     return result
 
 
