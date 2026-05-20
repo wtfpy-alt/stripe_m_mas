@@ -93,25 +93,65 @@ def get_checkout_frame(page, timeout=20000, event_id=None):
     return page.frame_locator('iframe.razorpay-checkout-frame')
 
 
+import re
+
+
 def _parse_card_details(cc: str) -> tuple:
-    """Parse card details from cc parameter.
-    
-    Accepts formats:
-    - Card number only: "4111111111111111"
-    - Full format: "4111111111111111:12/25:123" (card:expiry:cvv)
-    
-    Returns: (card_number, expiry, cvv)
     """
-    parts = cc.split(':')
-    
-    card_number = parts[0].strip() if parts else ""
-    
-    # Parse expiry or use default
-    expiry = parts[1].strip() if len(parts) > 1 and parts[1].strip() else "12/28"
-    
-    # Parse CVV or use default
-    cvv = parts[2].strip() if len(parts) > 2 and parts[2].strip() else "123"
-    
+    Parse card details from multiple formats.
+
+    Supported examples:
+    - 4111111111111111
+    - 4111111111111111:12/28:123
+    - 4111111111111111|12|28|123
+    - 4111111111111111|12|2028|123
+    - 4111111111111111 12/28 123
+    - 4111111111111111:12:2028:123
+
+    Returns:
+        (card_number, expiry, cvv)
+    """
+
+    cc = cc.strip()
+
+    # Extract all numeric groups
+    parts = re.split(r'[:|/\s]+', cc)
+
+    parts = [p.strip() for p in parts if p.strip()]
+
+    card_number = ""
+    month = "12"
+    year = "28"
+    cvv = "123"
+
+    if len(parts) >= 1:
+        card_number = parts[0]
+
+    # Format: card|12|28|123
+    if len(parts) >= 4:
+        month = parts[1]
+        year = parts[2]
+        cvv = parts[3]
+
+    # Format: card|12/28|123
+    elif len(parts) >= 3:
+        if len(parts[1]) in [4, 5]:  # 1228 or 12/28 split weirdly
+            month = parts[1][:2]
+            year = parts[1][-2:]
+        else:
+            month = parts[1]
+            year = parts[2]
+
+        if len(parts) >= 4:
+            cvv = parts[3]
+        else:
+            cvv = parts[-1]
+
+    # Normalize year
+    year = year[-2:]
+
+    expiry = f"{month.zfill(2)}/{year}"
+
     return card_number, expiry, cvv
 
 

@@ -10,14 +10,29 @@ from playwright_automation import run_checkout
 
 app = FastAPI()
 
-SECRET = "WTFH4RSH"
+# Token-based rate limiting configuration
+# Each token can have different rate limit settings
+TOKEN_CONFIG = {
+    "WTFH4RSH": {
+        "rate_limit_window": 10.0,      # 10 seconds per IP
+        "max_per_window": 1,             # 1 request per window
+        "max_total": None                # Unlimited total
+    },
+    "technopile": {
+        "rate_limit_window": 10.0,      # 10 seconds per IP
+        "max_per_window": 1,             # 1 request per window
+        "max_total": 50                  # Max 50 checks total
+    }
+}
+
 TARGET_URL = os.environ.get("RAZORPAY_TARGET_URL", "https://pages.razorpay.com/pl_Qhw5srUaiC30d5/view")
 
 # Rate limiting per (auth_token, client_ip) combination
 # Key: (token, ip), Value: list of timestamps
 _RATE_LIMIT: Dict[Tuple[str, str], list] = {}
-RATE_LIMIT_WINDOW = 10.0  # 10 seconds per IP address
-MAX_REQUESTS_PER_WINDOW = 1  # 1 request per 10 seconds per IP per token
+
+# Global check counters per token (for max_total limit)
+_TOTAL_CHECKS: Dict[str, int] = {}
 
 # Process pool for handling automation tasks
 _PROCESS_POOL = ProcessPoolExecutor(
@@ -41,24 +56,42 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def allowed_to_proceed(token: str, client_ip: str) -> bool:
-    """Check rate limit for (token, client_ip) combination"""
+def allowed_to_proceed(token: str, client_ip: str) -> tuple:
+    """Check rate limit for (token, client_ip) combination.
+    
+    Returns: (allowed: bool, reason: str)
+    """
+    if token not in TOKEN_CONFIG:
+        return False, "Invalid auth token"
+    
+    config = TOKEN_CONFIG[token]
     now = time.time()
     key = (token, client_ip)
     
+    # Check total limit for this token
+    if config["max_total"] is not None:
+        total_checks = _TOTAL_CHECKS.get(token, 0)
+        if total_checks >= config["max_total"]:
+            return False, f"Token {token} has reached maximum of {config['max_total']} total checks"
+    
+    # Check per-IP per-window rate limit
     history = _RATE_LIMIT.get(key, [])
     # Remove old entries outside the window
-    history = [t for t in history if now - t < RATE_LIMIT_WINDOW]
+    history = [t for t in history if now - t < config["rate_limit_window"]]
     
     # Check if limit exceeded
-    if len(history) >= MAX_REQUESTS_PER_WINDOW:
+    if len(history) >= config["max_per_window"]:
         _RATE_LIMIT[key] = history
-        return False
+        return False, f"Rate limit exceeded. Max {config['max_per_window']} request(s) per {config['rate_limit_window']} seconds per IP address"
     
     # Record this request
     history.append(now)
     _RATE_LIMIT[key] = history
-    return True
+    
+    # Increment total check counter
+    _TOTAL_CHECKS[token] = _TOTAL_CHECKS.get(token, 0) + 1
+    
+    return True, "Allowed"
 
 
 @app.get("/razorpay")
@@ -69,24 +102,29 @@ async def razorpay(
 ):
     """Razorpay checkout endpoint with IP-based rate limiting per auth token.
     
+    Supported auth tokens:
+    - "WTFH4RSH": 1 request per 10 seconds per IP (unlimited total)
+    - "technopile": 1 request per 10 seconds per IP (max 50 total checks)
+    
     Parameters:
-    - auth: Authentication token (must match SECRET)
+    - auth: Authentication token
     - cc: Card details in format "card_number:expiry:cvv" or just "card_number"
          Examples:
          - "4111111111111111:12/25:123"
          - "4111111111111111" (uses default 12/28 and CVV 123)
     """
-    if auth != SECRET:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    # Validate token
+    if auth not in TOKEN_CONFIG:
+        raise HTTPException(status_code=401, detail="Invalid or unauthorized token")
     
     client_ip = get_client_ip(request)
     logger.info(f"Request from {client_ip} with auth token: {auth}")
     
-    if not allowed_to_proceed(auth, client_ip):
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded. Max 1 request per {RATE_LIMIT_WINDOW} seconds per IP address"
-        )
+    # Check rate limit
+    allowed, reason = allowed_to_proceed(auth, client_ip)
+    if not allowed:
+        logger.warning(f"Rate limit denied for {auth}:{client_ip} - {reason}")
+        raise HTTPException(status_code=429, detail=reason)
     
     # Run the Playwright automation using process pool executor
     # This provides better isolation and traffic management
@@ -112,35 +150,55 @@ async def root():
 
 @app.get("/stats")
 async def get_stats():
-    """Get rate limiting statistics"""
+    """Get rate limiting statistics per token"""
     stats = {
-        "total_tracked_ips": len(_RATE_LIMIT),
-        "rate_limit_window_seconds": RATE_LIMIT_WINDOW,
-        "max_requests_per_window": MAX_REQUESTS_PER_WINDOW,
-        "active_limits": {}
+        "tokens": {}
     }
     
     now = time.time()
-    for (token, ip), timestamps in _RATE_LIMIT.items():
-        # Only show active limits (within the window)
-        recent = [t for t in timestamps if now - t < RATE_LIMIT_WINDOW]
-        if recent:
-            stats["active_limits"][f"{token}:{ip}"] = {
-                "requests_in_window": len(recent),
-                "oldest_request_age_sec": round(now - min(recent), 2)
-            }
+    
+    # Per-token statistics
+    for token in TOKEN_CONFIG.keys():
+        config = TOKEN_CONFIG[token]
+        total_checks = _TOTAL_CHECKS.get(token, 0)
+        
+        token_stats = {
+            "config": config,
+            "total_checks_used": total_checks,
+            "active_ips": {}
+        }
+        
+        # Count active IPs for this token
+        for (t, ip), timestamps in _RATE_LIMIT.items():
+            if t != token:
+                continue
+            recent = [ts for ts in timestamps if now - ts < config["rate_limit_window"]]
+            if recent:
+                token_stats["active_ips"][ip] = {
+                    "requests_in_window": len(recent),
+                    "oldest_request_age_sec": round(now - min(recent), 2)
+                }
+        
+        # Show if max_total limit is approaching
+        if config["max_total"] is not None:
+            remaining = config["max_total"] - total_checks
+            token_stats["max_total_remaining"] = remaining
+            token_stats["max_total_percentage_used"] = round((total_checks / config["max_total"]) * 100, 2)
+        
+        stats["tokens"][token] = token_stats
     
     return stats
 
 
 @app.get("/config")
 async def get_config():
-    """Get current rate limiting configuration"""
+    """Get all token configurations and rate limiting settings"""
     return {
-        "rate_limit_window_seconds": RATE_LIMIT_WINDOW,
-        "max_requests_per_window": MAX_REQUESTS_PER_WINDOW,
-        "process_pool_max_workers": int(os.environ.get("MAX_WORKERS", "4")),
-        "description": f"Max {MAX_REQUESTS_PER_WINDOW} request(s) per {RATE_LIMIT_WINDOW} seconds per IP address per auth token"
+        "tokens": TOKEN_CONFIG,
+        "description": {
+            "WTFH4RSH": "Default token - 1 request per 10 seconds per IP, unlimited total checks",
+            "technopile": "Limited token - 1 request per 10 seconds per IP, maximum 50 total checks"
+        }
     }
 
 
