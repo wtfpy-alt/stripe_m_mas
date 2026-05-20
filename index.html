@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razorpay Automation Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .form-section h2,
+        .output-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: #f9f9ff;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-clear {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-clear:hover {
+            background: #e0e0e0;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            color: #00ff00;
+            border-radius: 6px;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            border: 2px solid #333;
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 5px;
+            border-left: 3px solid #666;
+            padding-left: 10px;
+        }
+
+        .log-entry.info {
+            color: #00ff00;
+            border-color: #00ff00;
+        }
+
+        .log-entry.success {
+            color: #00ff00;
+            border-color: #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        .log-entry.warning {
+            color: #ffaa00;
+            border-color: #ffaa00;
+            background: rgba(255, 170, 0, 0.1);
+        }
+
+        .log-entry.error {
+            color: #ff4444;
+            border-color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+
+        .log-entry.step {
+            color: #00aaff;
+            border-color: #00aaff;
+            background: rgba(0, 170, 255, 0.1);
+        }
+
+        .timestamp {
+            color: #888;
+            font-size: 11px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.running {
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+        }
+
+        .status-indicator.success {
+            background: #00ff00;
+            animation: none;
+        }
+
+        .status-indicator.error {
+            background: #ff4444;
+            animation: none;
+        }
+
+        .status-indicator.idle {
+            background: #666;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-text {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .status-text.running {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status-text.success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .status-text.error {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .response-section {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .response-section h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .response-content {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        @media (max-width: 768px) {
+            .main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .config-hint {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Razorpay Automation Dashboard</h1>
+            <p>Live monitoring of payment automation process</p>
+        </div>
+
+        <div class="main">
+            <!-- Form Section -->
+            <div class="card form-section">
+                <h2>Configuration</h2>
+                
+                <div class="form-group">
+                    <label for="authToken">Auth Token <span style="color: red;">*</span></label>
+                    <input type="text" id="authToken" placeholder="Enter your secret token (default: WTFH4RSH)" value="WTFH4RSH">
+                    <div class="config-hint">Must match SECRET in app.py</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="cardNumber">Card Number <span style="color: red;">*</span></label>
+                    <input type="text" id="cardNumber" placeholder="e.g., 4111111111111111" value="4111111111111111">
+                    <div class="config-hint">Test card for automation</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="apiUrl">API URL</label>
+                    <input type="text" id="apiUrl" placeholder="http://localhost:8000" value="http://localhost:8000">
+                    <div class="config-hint">Backend server address</div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-submit" id="startBtn" onclick="startAutomation()">Start Automation</button>
+                    <button class="btn-clear" onclick="clearLogs()">Clear Logs</button>
+                </div>
+
+                <div id="statusText" class="status-text" style="display: none;">
+                    <span class="status-indicator idle"></span>
+                    <span id="statusMessage">Ready</span>
+                </div>
+            </div>
+
+            <!-- Output Section -->
+            <div class="card output-section">
+                <h2>Live Output</h2>
+                <div class="log-container" id="logContainer"></div>
+                <div id="responseSection" class="response-section" style="display: none;">
+                    <h3>Response Data:</h3>
+                    <div class="response-content" id="responseContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const logContainer = document.getElementById('logContainer');
+        const statusText = document.getElementById('statusText');
+        const statusMessage = document.getElementById('statusMessage');
+        const statusIndicator = statusText.querySelector('.status-indicator');
+        const startBtn = document.getElementById('startBtn');
+        const responseSection = document.getElementById('responseSection');
+        const responseContent = document.getElementById('responseContent');
+
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="timestamp">${timestamp}</span> ${escapeHtml(message)}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function setStatus(status, message) {
+            statusText.style.display = 'block';
+            statusMessage.textContent = message;
+            statusIndicator.className = `status-indicator ${status}`;
+            statusText.className = `status-text ${status}`;
+        }
+
+        async function startAutomation() {
+            const authToken = document.getElementById('authToken').value.trim();
+            const cardNumber = document.getElementById('cardNumber').value.trim();
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+
+            if (!authToken || !cardNumber) {
+                alert('Please fill in all required fields');
+                return;
+            }
+
+            clearLogs();
+            startBtn.disabled = true;
+            setStatus('running', 'Starting automation...');
+            responseSection.style.display = 'none';
+
+            addLog('🔄 Initializing payment automation...', 'step');
+            addLog(`📍 Target: ${apiUrl}/razorpay`, 'info');
+            addLog(`💳 Card: ${cardNumber.slice(-4).padStart(cardNumber.length, '*')}`, 'info');
+
+            try {
+                // Create EventSource for SSE
+                const eventSource = new EventSource(
+                    `${apiUrl}/razorpay/stream?auth=${encodeURIComponent(authToken)}&cc=${encodeURIComponent(cardNumber)}`
+                );
+
+                eventSource.addEventListener('open', () => {
+                    addLog('✅ Connection established to automation service', 'success');
+                });
+
+                eventSource.addEventListener('log', (event) => {
+                    const data = JSON.parse(event.data);
+                    addLog(data.message, data.type || 'info');
+                });
+
+                eventSource.addEventListener('complete', (event) => {
+                    const data = JSON.parse(event.data);
+                    eventSource.close();
+                    handleCompletion(data);
+                });
+
+                eventSource.addEventListener('error', (event) => {
+                    eventSource.close();
+                    addLog('❌ Connection error with automation service', 'error');
+                    setStatus('error', 'Automation failed');
+                    startBtn.disabled = false;
+                });
+
+                // Timeout after 5 minutes
+                setTimeout(() => {
+                    if (eventSource.readyState !== EventSource.CLOSED) {
+                        eventSource.close();
+                        addLog('⏱️ Automation timeout', 'warning');
+                        setStatus('error', 'Timeout');
+                        startBtn.disabled = false;
+                    }
+                }, 300000);
+
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                setStatus('error', 'Error occurred');
+                startBtn.disabled = false;
+            }
+        }
+
+        function handleCompletion(data) {
+            if (data.ok) {
+                addLog(`✅ Automation completed successfully!`, 'success');
+                if (data.status) {
+                    addLog(`📊 Status: ${data.status}`, 'success');
+                }
+                if (data.message) {
+                    addLog(`💬 Message: ${data.message}`, 'success');
+                }
+                setStatus('success', 'Automation completed');
+            } else {
+                addLog(`❌ Automation failed: ${data.error}`, 'error');
+                setStatus('error', 'Automation failed');
+            }
+
+            // Show response
+            responseContent.textContent = JSON.stringify(data, null, 2);
+            responseSection.style.display = 'block';
+            startBtn.disabled = false;
+        }
+
+        function clearLogs() {
+            logContainer.innerHTML = '';
+            responseSection.style.display = 'none';
+        }
+
+        // Initialize
+        addLog('🎯 Ready for automation. Configure and click Start.', 'info');
+    </script>
+</body>
+</html>
