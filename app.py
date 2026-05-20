@@ -43,6 +43,10 @@ async def razorpay(auth: str = Query(...), cc: str = Query(...)):
     result = await asyncio.to_thread(run_checkout, cc, TARGET_URL, True, 3, None)
     return result
 
+@app.get("/")
+async def root():
+    return {"status": "running"}
+
 
 if __name__ == "__main__":
     import os
