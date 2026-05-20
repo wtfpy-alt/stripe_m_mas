@@ -19,6 +19,32 @@ def _emit_event(event_id: Optional[str], message: str, event_type: str = "info")
             pass  # Silently fail if app not available
 
 
+def _get_random_name() -> str:
+    """Generate a random full name to avoid detection"""
+    first_names = [
+        "John", "Michael", "David", "Robert", "James", "William", "Richard", "Joseph",
+        "Thomas", "Charles", "Christopher", "Daniel", "Matthew", "Anthony", "Mark",
+        "Donald", "Kevin", "Steven", "Paul", "Andrew", "Joshua", "Kenneth", "George",
+        "Edward", "Brian", "Ronald", "Mary", "Patricia", "Jennifer", "Linda", "Barbara",
+        "Elizabeth", "Susan", "Jessica", "Sarah", "Karen", "Nancy", "Betty", "Margaret",
+        "Sandra", "Ashley", "Kimberly", "Emily", "Donna", "Michelle", "Dorothy", "Carol",
+        "Amanda", "Melissa", "Deborah", "Stephanie", "Rebecca", "Sharon", "Laura", "Cynthia"
+    ]
+    
+    last_names = [
+        "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis",
+        "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson",
+        "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Perez", "Thompson",
+        "White", "Harris", "Sanchez", "Clark", "Ramirez", "Lewis", "Robinson", "Young",
+        "Chavez", "Ruiz", "Torres", "Peterson", "Gray", "Steele", "Holland", "Winters",
+        "Bennett", "Cooper", "Mitchell", "Grant", "Pierce", "Kennedy", "Sullivan", "Bishop"
+    ]
+    
+    first = random.choice(first_names)
+    last = random.choice(last_names)
+    return f"{first} {last}"
+
+
 def wait_for_and_click(checkout_frame, selector, label, timeout=15000, event_id=None):
     """Wait for element and click it inside the checkout frame"""
     try:
@@ -67,14 +93,40 @@ def get_checkout_frame(page, timeout=20000, event_id=None):
     return page.frame_locator('iframe.razorpay-checkout-frame')
 
 
+def _parse_card_details(cc: str) -> tuple:
+    """Parse card details from cc parameter.
+    
+    Accepts formats:
+    - Card number only: "4111111111111111"
+    - Full format: "4111111111111111:12/25:123" (card:expiry:cvv)
+    
+    Returns: (card_number, expiry, cvv)
+    """
+    parts = cc.split(':')
+    
+    card_number = parts[0].strip() if parts else ""
+    
+    # Parse expiry or use default
+    expiry = parts[1].strip() if len(parts) > 1 and parts[1].strip() else "12/28"
+    
+    # Parse CVV or use default
+    cvv = parts[2].strip() if len(parts) > 2 and parts[2].strip() else "123"
+    
+    return card_number, expiry, cvv
+
+
 def run_checkout(cc: str, target_url: str, headless: bool = True, attempts: int = 3, event_id: Optional[str] = None) -> dict:
     """Run the Razorpay checkout flow with retries and jitter to avoid rate limits.
 
     Returns: dict with keys: ok (bool), message (str) or error (str)
     """
+    # Parse card details from cc parameter
+    card_number, expiry, cvv = _parse_card_details(cc)
+    
     _emit_event(event_id, "🚀 Starting payment checkout automation", "step")
     _emit_event(event_id, f"📍 Target URL: {target_url}", "info")
-    _emit_event(event_id, f"💳 Card: {cc[-4:].rjust(len(cc), '*')}", "info")
+    _emit_event(event_id, f"💳 Card: {card_number[-4:].rjust(len(card_number), '*')}", "info")
+    _emit_event(event_id, f"📅 Expiry: {expiry}", "info")
     
     for attempt in range(1, attempts + 1):
         try:
@@ -226,10 +278,10 @@ def run_checkout(cc: str, target_url: str, headless: bool = True, attempts: int 
 
                 # Fill Card Details
                 _emit_event(event_id, "💳 Filling card details...", "step")
-                card_ok = fill_card_field(checkout_frame, 'input[name="card.number"]', cc, "Card number", timeout=10000, event_id=event_id)
-                expiry_ok = fill_card_field(checkout_frame, 'input[name="card.expiry"]', "12/28", "Card expiry", timeout=10000, event_id=event_id)
-                cvv_ok = fill_card_field(checkout_frame, 'input[name="card.cvv"]', "123", "Card CVV", timeout=10000, event_id=event_id)
-                name_ok = fill_card_field(checkout_frame, 'input[name="card.name"]', "Automated Tester", "Cardholder name", timeout=10000, event_id=event_id)
+                card_ok = fill_card_field(checkout_frame, 'input[name="card.number"]', card_number, "Card number", timeout=10000, event_id=event_id)
+                expiry_ok = fill_card_field(checkout_frame, 'input[name="card.expiry"]', expiry, "Card expiry", timeout=10000, event_id=event_id)
+                cvv_ok = fill_card_field(checkout_frame, 'input[name="card.cvv"]', cvv, "Card CVV", timeout=10000, event_id=event_id)
+                name_ok = fill_card_field(checkout_frame, 'input[name="card.name"]', _get_random_name(), "Cardholder name", timeout=10000, event_id=event_id)
 
                 if card_ok and expiry_ok and cvv_ok and name_ok:
                     _emit_event(event_id, "✅ All card fields filled successfully", "success")
@@ -721,7 +773,7 @@ def run_checkout(cc: str, target_url: str, headless: bool = True, attempts: int 
                 try:
                     name_input = checkout.locator('input[name="card.name"]').first
                     name_input.wait_for(state="visible", timeout=4000)
-                    name_input.fill('Automated Tester', timeout=4000)
+                    name_input.fill(_get_random_name(), timeout=4000)
                     _emit_event(event_id, "✓ Cardholder name filled", "success")
                 except Exception as e:
                     _emit_event(event_id, f"⚠️ Name fill failed: {str(e)[:100]}", "warning")
@@ -1087,10 +1139,10 @@ def run_checkout(cc: str, target_url: str, headless: bool = True, attempts: int 
 
                 # Fill inputs (best-effort) — prefer direct fill to avoid keyboard emulation
                 try:
-                    checkout.locator('input[name="card.number"]').first.fill(cc, timeout=5000)
-                    checkout.locator('input[name="card.expiry"]').first.fill('12/28', timeout=4000)
-                    checkout.locator('input[name="card.cvv"]').first.fill('123', timeout=3000)
-                    checkout.locator('input[name="card.name"]').first.fill('Automated Tester', timeout=4000)
+                    checkout.locator('input[name="card.number"]').first.fill(card_number, timeout=5000)
+                    checkout.locator('input[name="card.expiry"]').first.fill(expiry, timeout=4000)
+                    checkout.locator('input[name="card.cvv"]').first.fill(cvv, timeout=3000)
+                    checkout.locator('input[name="card.name"]').first.fill(_get_random_name(), timeout=4000)
                 except Exception:
                     # continue even if fills fail — widget may behave differently
                     pass
