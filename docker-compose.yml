@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  payment-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.payment
+    container_name: payment-api
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - STRIPE_PUBLIC_KEY=${STRIPE_PUBLIC_KEY:-pk_live_51JHtoSI7vDXtMzkMWNk2vWkSCTd0CJleFGryfjIIz6CGQLaMEN6CUuo2u0hZUXS0z4SDQS8olGezV8Bfc6NIbmtK00YemvvHe5}
+    volumes:
+      - ./payment_api.py:/app/payment_api.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - payment-network
+
+networks:
+  payment-network:
+    driver: bridge

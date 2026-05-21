@@ -14,14 +14,14 @@ app = FastAPI()
 # Each token can have different rate limit settings
 TOKEN_CONFIG = {
     "WTFH4RSH": {
-        "rate_limit_window": 10.0,      # 10 seconds per IP
-        "max_per_window": 1,             # 1 request per window
+        "rate_limit_window": None,       # No rate limiting
+        "max_per_window": None,          # No limit per window
         "max_total": None                # Unlimited total
     },
     "technopile": {
-        "rate_limit_window": 10.0,      # 10 seconds per IP
+        "rate_limit_window": 5.0,        # 5 seconds per request
         "max_per_window": 1,             # 1 request per window
-        "max_total": 50                  # Max 50 checks total
+        "max_total": None                # Unlimited total
     }
 }
 
@@ -59,39 +59,47 @@ def get_client_ip(request: Request) -> str:
 def allowed_to_proceed(token: str, client_ip: str) -> tuple:
     """Check rate limit for (token, client_ip) combination.
     
-    Returns: (allowed: bool, reason: str)
+    Returns: (allowed: bool, reason: str, wait_time: float)
     """
     if token not in TOKEN_CONFIG:
-        return False, "Invalid auth token"
+        return False, "Invalid auth token", 0
     
     config = TOKEN_CONFIG[token]
     now = time.time()
     key = (token, client_ip)
     
+    # No rate limiting for this token
+    if config["rate_limit_window"] is None:
+        _TOTAL_CHECKS[token] = _TOTAL_CHECKS.get(token, 0) + 1
+        return True, "Allowed (no rate limiting)", 0
+    
     # Check total limit for this token
     if config["max_total"] is not None:
         total_checks = _TOTAL_CHECKS.get(token, 0)
         if total_checks >= config["max_total"]:
-            return False, f"Token {token} has reached maximum of {config['max_total']} total checks"
+            return False, f"Token {token} has reached maximum of {config['max_total']} total checks", 0
     
     # Check per-IP per-window rate limit
     history = _RATE_LIMIT.get(key, [])
     # Remove old entries outside the window
-    history = [t for t in history if now - t < config["rate_limit_window"]]
+    valid_history = [t for t in history if now - t < config["rate_limit_window"]]
     
     # Check if limit exceeded
-    if len(history) >= config["max_per_window"]:
-        _RATE_LIMIT[key] = history
-        return False, f"Rate limit exceeded. Max {config['max_per_window']} request(s) per {config['rate_limit_window']} seconds per IP address"
+    if len(valid_history) >= config["max_per_window"]:
+        # Calculate wait time
+        oldest = min(valid_history)
+        wait_time = round(config["rate_limit_window"] - (now - oldest), 2)
+        _RATE_LIMIT[key] = valid_history
+        return False, f"Rate limit exceeded. Wait {wait_time}s. Max {config['max_per_window']} request(s) per {config['rate_limit_window']} seconds", wait_time
     
     # Record this request
-    history.append(now)
-    _RATE_LIMIT[key] = history
+    valid_history.append(now)
+    _RATE_LIMIT[key] = valid_history
     
     # Increment total check counter
     _TOTAL_CHECKS[token] = _TOTAL_CHECKS.get(token, 0) + 1
     
-    return True, "Allowed"
+    return True, "Allowed", 0
 
 
 @app.get("/razorpay")
@@ -103,8 +111,8 @@ async def razorpay(
     """Razorpay checkout endpoint with IP-based rate limiting per auth token.
     
     Supported auth tokens:
-    - "WTFH4RSH": 1 request per 10 seconds per IP (unlimited total)
-    - "technopile": 1 request per 10 seconds per IP (max 50 total checks)
+    - "WTFH4RSH": No rate limiting
+    - "technopile": 1 request per 5 seconds per IP
     
     Parameters:
     - auth: Authentication token
@@ -121,7 +129,7 @@ async def razorpay(
     logger.info(f"Request from {client_ip} with auth token: {auth}")
     
     # Check rate limit
-    allowed, reason = allowed_to_proceed(auth, client_ip)
+    allowed, reason, wait_time = allowed_to_proceed(auth, client_ip)
     if not allowed:
         logger.warning(f"Rate limit denied for {auth}:{client_ip} - {reason}")
         raise HTTPException(status_code=429, detail=reason)
@@ -142,6 +150,112 @@ async def razorpay(
     except Exception as e:
         logger.error(f"Checkout failed for {client_ip}: {str(e)}")
         raise HTTPException(status_code=500, detail="Checkout automation failed")
+
+
+@app.get("/stripe")
+async def stripe(
+    request: Request,
+    auth: str = Query(...),
+    cc: str = Query(...)
+):
+    """Stripe payment processing endpoint with rate limiting per auth token.
+    
+    Uses stripe_payment_mimic.py to process actual Stripe payment flows.
+    
+    Supported auth tokens:
+    - "WTFH4RSH": No rate limiting (unlimited requests)
+    - "technopile": 1 request per 5 seconds per IP
+    
+    Parameters:
+    - auth: Authentication token
+    - cc: Card details in format "number|mm|yy|cvv"
+         Examples:
+         - "4242424242424248|06|28|123"
+         - "5555555555554444|12|2028|456"  (supports both 2 and 4-digit years)
+         - "378282246310005|06|28|1234"
+    
+    Returns:
+    - Stripe payment processing result with status, payment_id, and full details
+    """
+    # Validate token
+    if auth not in TOKEN_CONFIG:
+        raise HTTPException(status_code=401, detail="Invalid or unauthorized token")
+    
+    client_ip = get_client_ip(request)
+    logger.info(f"Stripe payment request from {client_ip} with auth token: {auth}")
+    
+    # Check rate limit
+    allowed, reason, wait_time = allowed_to_proceed(auth, client_ip)
+    if not allowed:
+        logger.warning(f"Rate limit denied for {auth}:{client_ip} - {reason}")
+        raise HTTPException(status_code=429, detail=reason)
+    
+    # Parse card details from "number|mm|yy|cvv" format
+    try:
+        parts = cc.split("|")
+        if len(parts) != 4:
+            raise HTTPException(status_code=400, detail="Invalid card format. Use: number|mm|yy|cvv")
+        
+        card_number = parts[0].strip()
+        exp_month = int(parts[1].strip())
+        exp_year = int(parts[2].strip())
+        cvc = parts[3].strip()
+        
+        # Convert 4-digit year to 2-digit if needed (e.g., 2028 -> 28)
+        if exp_year > 99:
+            exp_year = exp_year % 100
+        
+        # Validate card number
+        if not card_number.isdigit() or len(card_number) not in [13, 14, 15, 16]:
+            raise HTTPException(status_code=400, detail="Card number must be 13-16 digits")
+        
+        # Validate expiry
+        if not (1 <= exp_month <= 12):
+            raise HTTPException(status_code=400, detail="Expiry month must be 01-12")
+        
+        if not (0 <= exp_year <= 99):
+            raise HTTPException(status_code=400, detail="Expiry year must be 2-digit (00-99) or 4-digit (2000-2099)")
+        
+        # Validate CVC
+        if not cvc.isdigit() or len(cvc) not in [3, 4]:
+            raise HTTPException(status_code=400, detail="CVC must be 3-4 digits")
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid card data format: {str(e)}")
+    
+    # Prepare payment request
+    import requests as req
+    
+    try:
+        # Import and use stripe_payment_mimic for actual Stripe flow
+        from stripe_payment_mimic import process_payment_with_card
+        
+        logger.info(f"Processing payment for {client_ip} - Card ending in {card_number[-4:]}")
+        result = process_payment_with_card(card_number, exp_month, exp_year, cvc)
+        
+        logger.info(f"Payment result for {client_ip} - Status: {result.get('status')}")
+        
+        return {
+            "success": result.get("success", False),
+            "status": result.get("status"),
+            "payment_id": result.get("payment_id"),
+            "payment_method_id": result.get("payment_method_id"),
+            "card_type": result.get("card_type"),
+            "card_last4": result.get("card_last4"),
+            "amount": result.get("amount"),
+            "currency": result.get("currency"),
+            "stripe_status": result.get("stripe_status"),
+            "error_code": result.get("error_code"),
+            "error_message": result.get("error_message"),
+            "error": result.get("error")
+        }
+    
+    except ImportError as e:
+        logger.error(f"Cannot import stripe_payment_mimic: {str(e)}")
+        raise HTTPException(status_code=503, detail="Stripe payment module not available")
+    except Exception as e:
+        logger.error(f"Stripe payment error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Payment processing error: {str(e)}")
 
 @app.get("/")
 async def root():
@@ -165,19 +279,24 @@ async def get_stats():
         token_stats = {
             "config": config,
             "total_checks_used": total_checks,
+            "rate_limiting_enabled": config["rate_limit_window"] is not None,
             "active_ips": {}
         }
         
-        # Count active IPs for this token
-        for (t, ip), timestamps in _RATE_LIMIT.items():
-            if t != token:
-                continue
-            recent = [ts for ts in timestamps if now - ts < config["rate_limit_window"]]
-            if recent:
-                token_stats["active_ips"][ip] = {
-                    "requests_in_window": len(recent),
-                    "oldest_request_age_sec": round(now - min(recent), 2)
-                }
+        # Only show active IPs if rate limiting is enabled
+        if config["rate_limit_window"] is not None:
+            # Count active IPs for this token
+            for (t, ip), timestamps in _RATE_LIMIT.items():
+                if t != token:
+                    continue
+                recent = [ts for ts in timestamps if now - ts < config["rate_limit_window"]]
+                if recent:
+                    token_stats["active_ips"][ip] = {
+                        "requests_in_window": len(recent),
+                        "oldest_request_age_sec": round(now - min(recent), 2)
+                    }
+        else:
+            token_stats["active_ips"]["status"] = "No rate limiting"
         
         # Show if max_total limit is approaching
         if config["max_total"] is not None:
@@ -196,8 +315,28 @@ async def get_config():
     return {
         "tokens": TOKEN_CONFIG,
         "description": {
-            "WTFH4RSH": "Default token - 1 request per 10 seconds per IP, unlimited total checks",
-            "technopile": "Limited token - 1 request per 10 seconds per IP, maximum 50 total checks"
+            "WTFH4RSH": "No rate limiting - unlimited requests",
+            "technopile": "1 request per 5 seconds per IP"
+        },
+        "endpoints": {
+            "/stripe": {
+                "method": "GET",
+                "query_params": {
+                    "auth": "Authentication token (WTFH4RSH or technopile)",
+                    "cc": "Card details in format: number|mm|yy|cvv"
+                },
+                "examples": [
+                    "/stripe?auth=WTFH4RSH&cc=4242424242424248|06|28|123",
+                    "/stripe?auth=technopile&cc=5555555555554444|12|28|456"
+                ]
+            },
+            "/razorpay": {
+                "method": "GET",
+                "query_params": {
+                    "auth": "Authentication token",
+                    "cc": "Card details"
+                }
+            }
         }
     }
 
@@ -216,7 +355,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "app:app",
         host="0.0.0.0",
-        port=int(os.environ.get("PORT", 8080))
+        port=int(os.environ.get("PORT", 2101))
     )
 
 
