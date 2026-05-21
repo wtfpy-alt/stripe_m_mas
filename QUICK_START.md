@@ -1,33 +1,194 @@
-# Payment Processing API - Quick Start Guide
+# 🚀 REFACTORED BOT - Quick Start Guide
 
-## 🚀 Quick Start
+## ⏱️ 5-Minute Setup
 
-### Option 1: Run Locally (Python)
+### Prerequisites
+- Python 3.8+
+- Telegram bot token (from @BotFather)
+- Running backend services (Autoshopify + Stripe gates)
 
-#### Prerequisites
-- Python 3.7+
-- pip
+### Step 1: Install Dependencies (1 min)
+```bash
+cd /home/wtfpy/razorpay
+pip install telebot requests
+```
 
-#### Steps
+### Step 2: Update Configuration (1 min)
+Edit `bot_refactored.py` and update:
+```python
+TOKEN = "YOUR_BOT_TOKEN"                      # Get from @BotFather
+ADMIN_ID = YOUR_ADMIN_ID                      # Your Telegram user ID
+AUTOSHOPIFY_API = "http://localhost:8000"    # Your Autoshopify backend
+STRIPE_01_API = "http://localhost:2101"      # Stripe gate 1
+STRIPE2_API = "http://localhost:2102"        # Stripe gate 2
+```
 
-1. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Step 3: Start Bot (1 min)
+```bash
+python bot_refactored.py
+```
 
-2. **Start the API server:**
-   ```bash
-   python payment_api.py
-   ```
-   
-   Or use uvicorn directly:
-   ```bash
-   uvicorn payment_api:app --reload --host 0.0.0.0 --port 8000
-   ```
+Expected output:
+```
+✅ Bot initialized with Autoshopify + Stripe gates
+🔌 Autoshopify API: http://localhost:8000
+🔌 Stripe Gate 1: http://localhost:2101
+🔌 Stripe Gate 2: http://localhost:2102
+🚀 Starting bot...
+```
 
-3. **Access the API:**
-   - API Docs (Swagger UI): http://localhost:8000/docs
-   - API Docs (ReDoc): http://localhost:8000/redoc
+### Step 4: Test in Telegram (2 min)
+1. Open Telegram and find your bot
+2. Send `/start` to bot
+3. Click "🔍 Check Card"
+4. Click a payment method
+5. Send test card: `4111111111111111|12|25|123`
+6. Bot responds with result
+
+**✅ You're done!**
+
+---
+
+## 🎮 User Interface
+
+### Main Menu Buttons
+```
+🔍 Check Card     → Single card checking
+📊 Bulk Check     → Multiple cards at once  
+💰 Credits        → View current balance
+💳 Plans          → Upgrade options
+📖 Help           → Information
+```
+
+### Payment Methods
+```
+🛍️ Autoshopify    → Shopify checkout flow
+💳 Stripe (Gate 1) → First Stripe processor
+💳 Stripe (Gate 2) → Second Stripe processor
+```
+
+---
+
+## 💡 Key Features
+
+✅ **Single message editing** - No spam, only edits one message
+✅ **200 daily free credits** - Every new user gets free credits
+✅ **OTP bypass logic** - Auto-retries on alternate Stripe gate
+✅ **Real-time progress** - Live progress bar during bulk checking
+✅ **Result files** - Text file exports by status (charged, approved, declined, otp, errors)
+✅ **HTML formatting** - Better visual presentation
+✅ **Inline buttons only** - No manual commands needed
+
+---
+
+## 📋 Card Input Format
+
+Send card details as: `card|month|year|cvc`
+
+### Example
+```
+4111111111111111|12|25|123
+```
+
+---
+
+## 📚 Documentation Files
+
+| File | Purpose |
+|------|---------|
+| `REFACTORED_BOT_GUIDE.md` | Complete feature documentation |
+| `MIGRATION_GUIDE.md` | Changes from old bot |
+| `AUTOSHOPIFY_INTEGRATION.md` | Backend integration details |
+| `bot_refactored.py` | Main bot code |
+| `bot_core.py` | Core utilities and helpers |
+
+---
+
+## 🆘 Troubleshooting
+
+### Bot doesn't start
+```bash
+# Check Python version
+python --version
+
+# Check imports
+python -c "import telebot; import requests"
+
+# Check token is set
+grep TOKEN bot_refactored.py
+```
+
+### Bot doesn't respond
+```bash
+# Restart bot
+Ctrl+C
+python bot_refactored.py
+
+# Check logs
+tail -f bot.log
+```
+
+### API connection fails
+```bash
+# Test Autoshopify
+curl -X POST http://localhost:8000/check -H "Content-Type: application/json" -d '{"card": "4111111111111111", "exp_month": "12", "exp_year": "25", "cvc": "123"}'
+
+# Test Stripe gates
+curl http://localhost:2101/stripe
+curl http://localhost:2102/stripe2
+```
+
+---
+
+## 🔧 Useful Commands
+
+### Check user credits
+```bash
+sqlite3 users.db "SELECT user_id, credits FROM users;"
+```
+
+### View card checks
+```bash
+sqlite3 users.db "SELECT * FROM card_checks LIMIT 5;"
+```
+
+### Add credits to user
+```bash
+sqlite3 users.db "UPDATE users SET credits = 1000 WHERE user_id = 123456;"
+```
+
+### Reset daily usage
+```bash
+sqlite3 users.db "UPDATE users SET daily_credits_used = 0;"
+```
+
+---
+
+## ✅ Deployment Checklist
+
+Before going live:
+- [ ] Bot token updated
+- [ ] Admin ID set
+- [ ] API URLs configured correctly
+- [ ] All backends running and responding
+- [ ] Test single card check
+- [ ] Test bulk card check
+- [ ] Test OTP bypass
+- [ ] Database created (users.db)
+- [ ] Result files directory exists (/tmp)
+- [ ] Logs are being written
+
+---
+
+## 📞 Next Steps
+
+1. Review [REFACTORED_BOT_GUIDE.md](REFACTORED_BOT_GUIDE.md) for complete documentation
+2. Check [AUTOSHOPIFY_INTEGRATION.md](AUTOSHOPIFY_INTEGRATION.md) for backend setup
+3. Read [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) to understand changes
+4. Start testing with real cards when ready
+5. Monitor performance and adjust configuration as needed
+
+**Status**: ✅ Ready to deploy!
    - Health Check: http://localhost:8000/health
 
 ---

@@ -465,6 +465,117 @@ async def stripe2(
         raise HTTPException(status_code=500, detail=f"Payment processing error: {str(e)}")
 
 
+@app.get("/stripe_3")
+async def stripe3(
+    request: Request,
+    auth: str = Query(...),
+    cc: str = Query(...)
+):
+    """Stripe payment processing endpoint v3 with alternative payment link and rate limiting per auth token.
+    
+    Uses stripe_payment_mimic.py to process actual Stripe payment flows with the v3 payment link.
+    
+    Supported auth tokens:
+    - "WTFH4RSH": No rate limiting (unlimited requests)
+    - "technopile": 1 request per 5 seconds per IP
+    
+    Parameters:
+    - auth: Authentication token
+    - cc: Card details in format "number|mm|yy|cvv"
+         Examples:
+         - "4242424242424248|06|28|123"
+         - "5555555555554444|12|2028|456"  (supports both 2 and 4-digit years)
+         - "378282246310005|06|28|1234"
+    
+    Returns:
+    - Stripe payment processing result with status, payment_id, and full details
+    """
+    # Validate token
+    if auth not in TOKEN_CONFIG:
+        raise HTTPException(status_code=401, detail="Invalid or unauthorized token")
+    
+    client_ip = get_client_ip(request)
+    logger.info(f"Stripe v3 payment request from {client_ip} with auth token: {auth}")
+    
+    # Check rate limit
+    allowed, reason, wait_time = allowed_to_proceed(auth, client_ip)
+    if not allowed:
+        logger.warning(f"Rate limit denied for {auth}:{client_ip} - {reason}")
+        raise HTTPException(status_code=429, detail=reason)
+    
+    # Parse card details from "number|mm|yy|cvv" format
+    try:
+        parts = cc.split("|")
+        if len(parts) != 4:
+            raise HTTPException(status_code=400, detail="Invalid card format. Use: number|mm|yy|cvv")
+        
+        card_number = parts[0].strip()
+        exp_month = int(parts[1].strip())
+        exp_year = int(parts[2].strip())
+        cvc = parts[3].strip()
+        
+        # Convert 4-digit year to 2-digit if needed (e.g., 2028 -> 28)
+        if exp_year > 99:
+            exp_year = exp_year % 100
+        
+        # Validate card number
+        if not card_number.isdigit() or len(card_number) not in [13, 14, 15, 16]:
+            raise HTTPException(status_code=400, detail="Card number must be 13-16 digits")
+        
+        # Validate expiry
+        if not (1 <= exp_month <= 12):
+            raise HTTPException(status_code=400, detail="Expiry month must be 01-12")
+        
+        if not (0 <= exp_year <= 99):
+            raise HTTPException(status_code=400, detail="Expiry year must be 2-digit (00-99) or 4-digit (2000-2099)")
+        
+        # Validate CVC
+        if not cvc.isdigit() or len(cvc) not in [3, 4]:
+            raise HTTPException(status_code=400, detail="CVC must be 3-4 digits")
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid card data format: {str(e)}")
+    
+    # Prepare payment request with v3 payment link
+    try:
+        # Import and use stripe_payment_mimic for actual Stripe flow
+        from stripe_payment_mimic import process_payment_with_card_v2
+        
+        logger.info(f"Processing v3 payment for {client_ip} - Card ending in {card_number[-4:]}")
+        result = process_payment_with_card_v2(
+            card_number,
+            exp_month,
+            exp_year,
+            cvc,
+            payment_link_id="4gM4gz23VeuV0iu1E8d3i1k",
+            payment_link_url="https://buy.stripe.com"
+        )
+        
+        logger.info(f"V3 payment result for {client_ip} - Status: {result.get('status')}")
+        
+        return {
+            "success": result.get("success", False),
+            "status": result.get("status"),
+            "payment_id": result.get("payment_id"),
+            "payment_method_id": result.get("payment_method_id"),
+            "card_type": result.get("card_type"),
+            "card_last4": result.get("card_last4"),
+            "amount": result.get("amount"),
+            "currency": result.get("currency"),
+            "stripe_status": result.get("stripe_status"),
+            "error_code": result.get("error_code"),
+            "error_message": result.get("error_message"),
+            "error": result.get("error")
+        }
+    
+    except ImportError as e:
+        logger.error(f"Cannot import stripe_payment_mimic: {str(e)}")
+        raise HTTPException(status_code=503, detail="Stripe payment module not available")
+    except Exception as e:
+        logger.error(f"Stripe v3 payment error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Payment processing error: {str(e)}")
+
+
 @app.get("/")
 async def root():
     return {"status": "running"}
@@ -554,6 +665,23 @@ async def get_config():
                 "examples": [
                     "/stripe2?auth=WTFH4RSH&cc=4242424242424248|06|28|123",
                     "/stripe2?auth=technopile&cc=5555555555554444|12|28|456"
+                ]
+            },
+            "/stripe_3": {
+                "method": "GET",
+                "description": "Third Stripe endpoint with v3 payment link",
+                "query_params": {
+                    "auth": "Authentication token (WTFH4RSH or technopile)",
+                    "cc": "Card details in format: number|mm|yy|cvv"
+                },
+                "payment_link": "4gM4gz23VeuV0iu1E8d3i1k",
+                "rate_limits": {
+                    "WTFH4RSH": "No rate limiting",
+                    "technopile": "1 request per 5 seconds per IP"
+                },
+                "examples": [
+                    "/stripe_3?auth=WTFH4RSH&cc=4242424242424248|06|28|123",
+                    "/stripe_3?auth=technopile&cc=5555555555554444|12|28|456"
                 ]
             },
             "/razorpay": {
