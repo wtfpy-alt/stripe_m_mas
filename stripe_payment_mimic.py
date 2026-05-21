@@ -15,6 +15,10 @@ from typing import Dict, Any
 PAYMENT_LINK_ID = "28E5kDbEv0E59T4beId3i1r"
 PAYMENT_LINK_URL = "https://buy.stripe.com"
 
+# Alternative payment links
+PAYMENT_LINK_ID_2 = "28EaEX0ZR72t5CO2Icd3i1z"
+PAYMENT_LINK_URL_2 = "https://buy.stripe.com"
+
 # List of random user agents
 USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
@@ -1166,6 +1170,50 @@ def process_payment_with_card(card_number: str, exp_month: int, exp_year: int, c
         "error_message": error_obj.get('message') if error_obj else None,
         "full_response": final_intent
     }
+
+
+def process_payment_with_card_v2(
+    card_number: str,
+    exp_month: int,
+    exp_year: int,
+    cvc: str,
+    payment_link_id: str = None,
+    payment_link_url: str = None
+) -> Dict[str, Any]:
+    """
+    Process a payment using custom card data with optional alternative payment link.
+    
+    Args:
+        card_number: 13-16 digit card number
+        exp_month: Expiry month (1-12)
+        exp_year: Expiry year (2-digit or 4-digit)
+        cvc: 3-4 digit security code
+        payment_link_id: Optional alternative payment link ID (defaults to PAYMENT_LINK_ID)
+        payment_link_url: Optional alternative payment link URL (defaults to PAYMENT_LINK_URL)
+    
+    Returns:
+        dict: Payment result with status and details
+    """
+    # Set global payment link variables if provided
+    global PAYMENT_LINK_ID, PAYMENT_LINK_URL
+    
+    original_link_id = PAYMENT_LINK_ID
+    original_link_url = PAYMENT_LINK_URL
+    
+    try:
+        # Use provided payment link or defaults
+        if payment_link_id:
+            PAYMENT_LINK_ID = payment_link_id
+        if payment_link_url:
+            PAYMENT_LINK_URL = payment_link_url
+        
+        # Call the original function
+        return process_payment_with_card(card_number, exp_month, exp_year, cvc)
+    
+    finally:
+        # Always restore original values
+        PAYMENT_LINK_ID = original_link_id
+        PAYMENT_LINK_URL = original_link_url
 
 
 def expected_response_example() -> Dict[str, Any]:
