@@ -6,15 +6,18 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 # MongoDB Connection
 MONGO_URL = os.getenv("MONGO_URL", "mongodb+srv://wtfpy:WTF%40H4rsh@strongdb.lxirct8.mongodb.net/?appName=strongdb")
-DB_NAME = os.getenv("DB_NAME", "razor_x_bot")
 
 client = AsyncIOMotorClient(
     MONGO_URL,
     tls=True,
     tlsCAFile=certifi.where(),
-    serverSelectionTimeoutMS=30000
+    retryWrites=True,
+    serverSelectionTimeoutMS=30000,
+    connectTimeoutMS=30000,
+    socketTimeoutMS=30000
 )
-db = client[DB_NAME]
+
+db = client["razor_x_bot"]
 
 # Collections
 users_col = db["users"]
