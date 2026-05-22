@@ -114,11 +114,18 @@ async def startup_event():
 
     bot_path = os.path.join(
         BASE_DIR,
-        "bot",
+        "RAZOR X BOT",
+        "Leak-main",
         "bot.py"
     )
 
     bot_cwd = os.path.dirname(bot_path)
+
+    print(f"Bot path: {bot_path}")
+
+    if not os.path.exists(bot_path):
+        print("❌ bot.py not found!")
+        return
 
     if _BOT_PROCESS is None or _BOT_PROCESS.poll() is not None:
 
