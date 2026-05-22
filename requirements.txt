@@ -27,10 +27,10 @@ watchfiles==1.2.0
 websockets==16.0
 subprocess32==3.5.4
 motor==3.1.1
-pymongo==4.3.3
+pymongo
 telethon==1.27.0
 aiogram
-pymongo[srv]==4.6.3
+pymongo[srv]
 motor==3.4.0
 dnspython==2.6.1
 certifi==2024.2.2
