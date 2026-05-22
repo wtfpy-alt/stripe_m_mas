@@ -180,7 +180,7 @@ async def razorpay(
             run_checkout,
             cc,
             TARGET_URL,
-            False,  # headless
+            True,  # headless
             3,     # attempts
             None   # event_id
         )

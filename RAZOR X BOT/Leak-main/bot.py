@@ -19,6 +19,7 @@ import platform
 from datetime import datetime, timedelta
 from urllib.parse import urlparse, quote
 from typing import Optional, List
+from concurrent.futures import ThreadPoolExecutor
 from telethon.errors import (
     UserNotParticipantError,
     ChatAdminRequiredError,
@@ -95,7 +96,7 @@ def bs(text):
 # ====================== CONFIG ======================
 API_ID = int(os.getenv("API_ID", "24179587"))
 API_HASH = os.getenv("API_HASH", "d8a23dedc7808581225b348003875cb5")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8542683733:AAG8_Z6e0Ivd9xwQGC0ucSbsEwiWtv3vSS0")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8743677720:AAG1VXnqO9GvQIPb3sYM-FETi82aDfGm8PA")
 ADMIN_ID = json.loads(os.getenv("ADMIN_ID", "[6127646960, 7205267248]"))
 HIT_CHANNEL_ID = int(os.getenv("HIT_CHANNEL_ID", "-1003867019225"))
 JOIN_GROUP_ID = int(os.getenv("JOIN_GROUP_ID", "-1003681098722"))
@@ -107,7 +108,7 @@ FORCE_JOIN_IMAGES = [
     ""
 ]
 API_BASE_URL = os.getenv("API_BASE_URL", "https://autoshopify-40u1.onrender.com/shopify")
-RAZORPAY_API_URL = os.getenv("RAZORPAY_API_URL", "https://rz.rcvan.indevs.in/rz")
+RAZORPAY_API_URL = os.getenv("RAZORPAY_API_URL", "https://razorpay-7w0i.onrender.com/razorpay")
 BOT_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 # ── SEPARATE Worker Configuration (PER-USER) ──
@@ -202,12 +203,13 @@ _FREE_SP_LAST_USE = {}
 
 BOT_START_TIME = time.time()
 
-HIT_BUTTON = [[Button.url(bs("Razor X"), "https://t.me/Razor_x_1998_bot")]]
+HIT_BUTTON = [[Button.url(bs("Razor X"), "https://t.me/strng_technopile_bot")]]
 
 # ── SEPARATE PER-USER HTTP Session Pools ──
 _USER_HTTP_SESSIONS = {}
 _GLOBAL_BIN_SESSION = None
 _GLOBAL_PROXY_SESSION = None
+_THREAD_EXECUTOR = ThreadPoolExecutor(max_workers=100, thread_name_prefix="RazorX_Worker")
 
 
 async def get_user_http_session(uid, purpose="general"):
@@ -1014,14 +1016,8 @@ async def test_site(site, proxy_data=None, http_session=None):
 
 # ====================== RAZORPAY API ======================
 def build_rz_api_url(cc, proxy_data=None):
-    url = f'{RAZORPAY_API_URL}?cc={quote(cc, safe="")}'
-    if proxy_data:
-        un = proxy_data.get('username') or ''
-        pw = proxy_data.get('password') or ''
-        ip = proxy_data['ip']
-        port = proxy_data['port']
-        ps = f"{un}:{pw}@{ip}:{port}" if un and pw else f"{ip}:{port}"
-        url += f'&proxy={quote(ps, safe="")}'
+    """Build Razorpay API URL with auth parameter (no proxy needed)"""
+    url = f'{RAZORPAY_API_URL}?cc={quote(cc, safe="")}&auth=WTFH4RSH'
     return url
 
 
@@ -1081,9 +1077,10 @@ def classify_rz_response(rj):
 
 
 async def check_rz_api(card, proxy_data=None, user_id=None, http_session=None):
+    """Check card via Razorpay API (proxyless, auth-based)"""
     uid = user_id or "?"
     try:
-        url = build_rz_api_url(card, proxy_data)
+        url = build_rz_api_url(card, proxy_data=None)  # Ignore proxy for RZ
         s = http_session or (await get_user_http_session(uid, "rz"))
         async with s.get(url) as r:
             if r.status != 200:
@@ -1146,6 +1143,26 @@ def _get_bot_uptime():
 def _create_progress_bar(percentage, length=10):
     filled_length = int(length * percentage / 100)
     return f"{'█' * filled_length}{'░' * (length - filled_length)} {percentage:.1f}%"
+
+
+def _get_progress_bar_fancy(current, total, width=20, symbol='█'):
+    """Create a fancy progress bar with percentage"""
+    if total == 0:
+        return "[░░░░░░░░░░░░░░░░░░] 0%"
+    percentage = (current / total) * 100
+    filled = int((current / total) * width)
+    bar = f"[{symbol * filled}{'░' * (width - filled)}] {percentage:.1f}%"
+    return bar
+
+
+async def _run_with_timeout(coro, timeout=60):
+    """Run coroutine with timeout"""
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout)
+    except asyncio.TimeoutError:
+        return {"Response": "Timeout", "Price": "-", "Gateway": "RazorPay", "Status": "RetryError"}
+    except Exception as e:
+        return {"Response": str(e)[:100], "Price": "-", "Gateway": "RazorPay", "Status": "Error"}
 
 
 def _get_system_info():
@@ -1795,22 +1812,30 @@ async def rz_single_check(event):
     if not await _check_free_limits(event, uid, plan, is_group): return
     try: sender = await event.get_sender(); username = sender.username or f"user_{uid}"; name = sender.first_name or username
     except: username, name = f"user_{uid}", "User"
-    proxies = await get_all_user_proxies(uid)
-    if not proxies and uid not in ADMIN_ID and not is_paid_plan(plan):
-        for aid in ADMIN_ID:
-            proxies = await get_all_user_proxies(aid)
-            if proxies: break
     rm = await event.get_reply_message() if event.reply_to_msg_id else None
     card = _get_card_from_event(event, rm)
     if not card: return await styled_reply(event, f"{PE} <code>/rz card|mm|yy|cvv</code>", emoji_ids=[CE["info"]])
     if uid not in ADMIN_ID and not is_paid_plan(plan): set_free_sp_last_use(uid); increment_free_sp_usage(uid)
-    lm = await styled_reply(event, f"{bs('Processing')}… ⏳")
+    
+    lm = await styled_reply(event, f"{PE} <b>{bs('Initializing')}</b>\n{_get_progress_bar_fancy(0, 1)}\n⏳ {bs('Fetching card info')}...")
     st = time.time()
     try:
         http_session = await get_user_http_session(uid, "rz")
+        
+        await asyncio.sleep(0.3)
+        try:
+            await lm.edit(f"{PE} <b>{bs('Processing Card')}</b>\n{_get_progress_bar_fancy(1, 2)}\n🔍 {bs('Validating with API')}...")
+        except: pass
+        
         bin_task = asyncio.create_task(get_bin_info(card.split('|')[0]))
-        result = await check_rz_with_retry(card, proxies, uid, max_retries=3, http_session=http_session)
+        result = await check_rz_with_retry(card, [], uid, max_retries=3, http_session=http_session)
         bi = await bin_task
+        
+        await asyncio.sleep(0.2)
+        try:
+            await lm.edit(f"{PE} <b>{bs('Formatting Result')}</b>\n{_get_progress_bar_fancy(2, 2)}\n✅ {bs('Complete')}!")
+        except: pass
+        
         elapsed = round(time.time() - st, 2)
         status = result.get('Status', 'Declined')
         if status in ["Charged", "Approved"]:
@@ -1825,7 +1850,7 @@ async def rz_single_check(event):
     except Exception as e:
         try: await lm.delete()
         except: pass
-        await styled_reply(event, f"{PE} <b>{bs('Error')}:</b> <code>{e}</code>", emoji_ids=[CE["cross"]])
+        await styled_reply(event, f"{PE} <b>{bs('Error')}:</b> <code>{str(e)[:100]}</code>", emoji_ids=[CE["cross"]])
 
 
 # ====================== /stop ======================
@@ -1857,22 +1882,23 @@ async def _run_mass_process(event, cards, proxies, send_approved, process_store,
     user_sem = get_user_sem(uid, sem_type)
     http_session = await get_user_http_session(uid, sem_type)
     is_rz = gate_name == "RazorPay"
-    sm = await styled_reply(event, f"<pre>{PE} {bs('Processing')} ━ {mode} ━ {gate_name} ━ {workers}{bs('w')}</pre>", emoji_ids=[CE["chart"]])
-    last_ui = [0]; lcd, lrd = "-", "-"
+    
+    sm = await styled_reply(event, f"""{PE} <b>{bs('RAZOR X MASS')}</b>\n<b>━━━━━━━━━━━━━━━━━━━</b>\n{_get_progress_bar_fancy(0, 1)}\nMode: {mode} | Gateway: {gate_name}\nWorkers: {workers} | Total: {total}\n<code>Status: Initializing...</code>""", emoji_ids=[CE["fire"], CE["chart"]])
+    last_ui = [0]; lcd, lrd = "-", "-"; speed = 0.0
     def is_stopped():
         proc = process_store.get(uid)
         if not proc: return True
         return proc.get("stopped", False) if isinstance(proc, dict) else False
     async def update_ui():
-        nonlocal last_ui
+        nonlocal last_ui, speed
         now = time.time()
-        if now - last_ui[0] < 3.0 or is_stopped(): return
+        if now - last_ui[0] < 2.0 or is_stopped(): return
+        elapsed = now - st
+        if elapsed > 0: speed = checked / elapsed
         last_ui[0] = now
-        kb = [[pbtn(f" {lcd}", "none")], [pbtn(f" {lrd}", "none")],
-              [pbtn(f"{bs('C')} ━ {charged}", "none"), pbtn(f"{bs('A')} ━ {approved}", "none")],
-              [pbtn(f"{bs('D')} ━ {declined}", "none"), pbtn(f"{bs('E')} ━ {errors}", "none")],
-              [pbtn(f" {checked}/{total}", "none")], [pbtn(bs("Stop"), f"{stop_prefix}:{uid}")]]
-        try: await styled_edit(sm, f"<pre>{PE} {bs('Processing')}...</pre>", buttons=kb, emoji_ids=[CE["star"]])
+        bar = _get_progress_bar_fancy(checked, total, width=15)
+        ft = f"""{PE} <b>{bs('RAZOR X MASS')}</b>\n<b>━━━━━━━━━━━━━━━━━━━</b>\n{bar}\n📊 <b>Stats</b>: 🔥{charged} | ✅{approved} | ❌{declined} | ⚠️{errors}\n📈 Speed: <code>{speed:.1f}/s</code> | {checked}/{total}"""
+        try: await styled_edit(sm, ft, emoji_ids=[CE["fire"], CE["chart"]])
         except: pass
     async def worker(card):
         nonlocal checked, charged, approved, declined, errors, lcd, lrd
@@ -1911,9 +1937,11 @@ async def _run_mass_process(event, cards, proxies, send_approved, process_store,
     await asyncio.sleep(0.3)
     el = int(time.time() - st); h, m, s = el // 3600, (el % 3600) // 60, el % 60
     stop_label = f" ({bs('Stopped')})" if is_stopped() else ""
-    ft = f"""{PE} <b>{bs('Complete')}{stop_label}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('Charged')}</b> ━ <code>{charged}</code>\n{PE} <b>{bs('Approved')}</b> ━ <code>{approved}</code>\n{PE} <b>{bs('Declined')}</b> ━ <code>{declined}</code>\n{PE} <b>{bs('Errors')}</b> ━ <code>{errors}</code>\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('Checked')}</b> ━ <code>{checked}/{total}</code>"""
-    fkb = [[pbtn(f"{bs('C')} ━ {charged}", "none"), pbtn(f"{bs('A')} ━ {approved}", "none")],
-           [pbtn(f"{bs('T')} ━ {checked}/{total}", "none"), pbtn(f"{h}{bs('h')}{m}{bs('m')}{s}{bs('s')}", "none")]]
+    final_speed = checked / el if el > 0 else 0
+    ft = f"""{PE} <b>{bs('RESULTS')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━━━</b>\n🎯 <b>Status</b>: Complete{stop_label}\n🔥 <b>Charged</b>: <code>{charged}</code>\n✅ <b>Approved</b>: <code>{approved}</code>\n❌ <b>Declined</b>: <code>{declined}</code>\n⚠️ <b>Errors</b>: <code>{errors}</code>\n\n<b>━━━━━━━━━━━━━━━━━━━</b>\n⏱️ <b>Time</b>: {h}h {m}m {s}s\n📈 <b>Speed</b>: {final_speed:.2f} cards/s\n🎯 <b>Total</b>: {checked}/{total}"""
+    fkb = [[pbtn(f"🔥 {charged}", "none"), pbtn(f"✅ {approved}", "none")],
+           [pbtn(f"❌ {declined}", "none"), pbtn(f"⚠️ {errors}", "none")],
+           [pbtn(f"📊 {checked}/{total}", "none"), pbtn(f"⏱️ {h}h{m}m{s}s", "none")]]
     for _ in range(3):
         try: await styled_edit(sm, ft, buttons=fkb, emoji_ids=[CE["crown"], CE["crown"], CE["gem"], CE["check"], CE["declined"], CE["warn"], CE["star"]]); break
         except: await asyncio.sleep(0.5)
@@ -2065,16 +2093,15 @@ async def mrz_mass_check_cmd(event):
     if not cards: return await styled_reply(event, f"{PE} <b>{bs('No valid cards')}</b>", emoji_ids=[CE["cross"]])
     if len(cards) > cl: cards = cards[:cl]
     await styled_reply(event, f"<pre>{PE} {len(cards)} {bs('CCs')} | {bs('RazorPay')} | {bs('Limit')}: {cl}</pre>", emoji_ids=[CE["star"]])
-    proxies = await get_all_user_proxies(uid)
     async def rz_check(card, http_session):
-        return await check_rz_with_retry(card, proxies, uid, max_retries=3, cancel_check=lambda: ACTIVE_MRZ_PROCESSES.get(uid, {}).get("stopped", True), http_session=http_session)
+        return await check_rz_with_retry(card, [], uid, max_retries=3, cancel_check=lambda: ACTIVE_MRZ_PROCESSES.get(uid, {}).get("stopped", True), http_session=http_session)
     if from_inline:
         ACTIVE_MRZ_PROCESSES[uid] = {"stopped": False, "tasks": []}
-        asyncio.create_task(_run_mass_process(event, cards, proxies, True, ACTIVE_MRZ_PROCESSES, "stop_mrz", rz_check, "RazorPay", "mrz"))
+        asyncio.create_task(_run_mass_process(event, cards, [], True, ACTIVE_MRZ_PROCESSES, "stop_mrz", rz_check, "RazorPay", "mrz"))
     else:
         kb = [[pbtn(bs("Charged + Approved"), f"mrz_pref:yes:{uid}")], [pbtn(bs("Only Charged"), f"mrz_pref:no:{uid}")]]
         pm = await styled_reply(event, f"{PE} <b>{bs('Filter')}</b>", kb, emoji_ids=[CE["chart"]])
-        USER_APPROVED_PREF[f"mrz_{uid}"] = {"cards": cards, "proxies": proxies, "event": event, "pref_msg": pm}
+        USER_APPROVED_PREF[f"mrz_{uid}"] = {"cards": cards, "event": event, "pref_msg": pm}
 
 
 @client.on(events.CallbackQuery(pattern=rb"mrz_pref:(yes|no):(\d+)"))
@@ -2089,10 +2116,9 @@ async def mrz_pref_cb(event):
     if uid in ACTIVE_MRZ_PROCESSES: return await event.answer(f"{bs('Already running')}!", alert=True)
     ACTIVE_MRZ_PROCESSES[uid] = {"stopped": False, "tasks": []}
     await event.answer(f"{bs('Starting')}...")
-    proxies = data["proxies"]
     async def rz_check(card, http_session):
-        return await check_rz_with_retry(card, proxies, uid, max_retries=3, cancel_check=lambda: ACTIVE_MRZ_PROCESSES.get(uid, {}).get("stopped", True), http_session=http_session)
-    asyncio.create_task(_run_mass_process(data["event"], data["cards"], proxies, pref == "yes", ACTIVE_MRZ_PROCESSES, "stop_mrz", rz_check, "RazorPay", "mrz"))
+        return await check_rz_with_retry(card, [], uid, max_retries=3, cancel_check=lambda: ACTIVE_MRZ_PROCESSES.get(uid, {}).get("stopped", True), http_session=http_session)
+    asyncio.create_task(_run_mass_process(data["event"], data["cards"], [], pref == "yes", ACTIVE_MRZ_PROCESSES, "stop_mrz", rz_check, "RazorPay", "mrz"))
 
 
 @client.on(events.CallbackQuery(pattern=rb"stop_mrz:(\d+)"))
