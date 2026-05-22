@@ -96,7 +96,7 @@ def bs(text):
 API_ID = int(os.getenv("API_ID", "24179587"))
 API_HASH = os.getenv("API_HASH", "d8a23dedc7808581225b348003875cb5")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8542683733:AAG8_Z6e0Ivd9xwQGC0ucSbsEwiWtv3vSS0")
-ADMIN_ID = json.loads(os.getenv("ADMIN_ID", "[6127646960]"))
+ADMIN_ID = json.loads(os.getenv("ADMIN_ID", "[6127646960, 7205267248]"))
 HIT_CHANNEL_ID = int(os.getenv("HIT_CHANNEL_ID", "-1003867019225"))
 JOIN_GROUP_ID = int(os.getenv("JOIN_GROUP_ID", "-1003681098722"))
 #JOIN_CHANNEL_ID = int(os.getenv("JOIN_CHANNEL_ID", ""))
