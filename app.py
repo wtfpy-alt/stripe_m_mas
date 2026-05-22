@@ -110,10 +110,14 @@ _BOT_PROCESS = None
 async def startup_event():
     global _BOT_PROCESS
 
-    # Absolute path to bot.py
-    bot_path = "/home/wtfpy/razorpay/RAZOR X BOT/Leak-main/bot.py"
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    # Bot working directory
+    bot_path = os.path.join(
+        BASE_DIR,
+        "bot",
+        "bot.py"
+    )
+
     bot_cwd = os.path.dirname(bot_path)
 
     if _BOT_PROCESS is None or _BOT_PROCESS.poll() is not None:
