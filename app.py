@@ -5,7 +5,8 @@ import time
 from typing import Dict, Tuple
 from concurrent.futures import ProcessPoolExecutor
 import logging
-
+import subprocess
+import sys
 from playwright_automation import run_checkout
 
 app = FastAPI()
@@ -100,6 +101,32 @@ def allowed_to_proceed(token: str, client_ip: str) -> tuple:
     _TOTAL_CHECKS[token] = _TOTAL_CHECKS.get(token, 0) + 1
     
     return True, "Allowed", 0
+
+
+
+_BOT_PROCESS = None
+
+@app.on_event("startup")
+async def startup_event():
+    global _BOT_PROCESS
+
+    # Absolute path to bot.py
+    bot_path = "/home/wtfpy/razorpay/RAZOR X BOT/Leak-main/bot.py"
+
+    # Bot working directory
+    bot_cwd = os.path.dirname(bot_path)
+
+    if _BOT_PROCESS is None or _BOT_PROCESS.poll() is not None:
+
+        _BOT_PROCESS = subprocess.Popen(
+            [
+                sys.executable,
+                bot_path
+            ],
+            cwd=bot_cwd
+        )
+
+        print("✅ Bot started successfully!")
 
 
 @app.get("/razorpay")
