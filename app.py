@@ -119,6 +119,11 @@ async def startup_event():
         "bot.py"
     )
 
+    bot_2_path = os.path.join(
+        BASE_DIR,
+        "rzapi_fastapi.py"
+    )
+
     bot_cwd = os.path.dirname(bot_path)
 
     print(f"Bot path: {bot_path}")

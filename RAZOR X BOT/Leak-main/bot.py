@@ -8,6 +8,7 @@ import asyncio
 import aiohttp
 import aiofiles
 import os
+import sys
 import random
 import time
 import json
@@ -44,6 +45,15 @@ from database import (
     get_total_sites_count, get_users_with_sites, get_sites_per_user, get_all_sites_detail,
     mark_user_joined, is_user_marked_joined, remove_joined_mark
 )
+
+# Import UI improvements
+sys_path_add = __file__.replace('RAZOR X BOT/Leak-main/bot.py', '')
+if sys_path_add not in __import__('sys').path:
+    __import__('sys').path.insert(0, sys_path_add)
+try:
+    from ui_improvements import *
+except ImportError:
+    pass  # Fallback if ui_improvements is not available
 
 # ====================== LOGGING ======================
 log = logging.getLogger("RazorX")
@@ -584,18 +594,24 @@ def format_card_result(status, card, gateway, response, price="-", site="-", bin
     bi = bin_info or {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "flag": "🏳️"}
     ps = f"${str(price).replace('$', '')}" if price and price != "-" else "-"
     return f"""{h}
-<b>━━━━━━━━━━━━━━━━━</b>
-<a href='https://t.me/technopile'>⊀</a> <b>{bs('Card')}</b>
-⤷ <code>{card}</code>
-<b>{bs('Gateway')}</b> ━ <code>{gateway}</code>
-<b>{bs('Response')}</b> ━ <code>{response}</code>
-<b>{bs('Price')}</b> ━ <code>{ps}</code>
-<b>━━━━━━━━━━━━━━━━━</b>
-<b>{bs('BIN')}:</b> <code>{bi.get('brand', '-')} | {bi.get('type', '-')} | {bi.get('level', '-')}</code>
-<b>{bs('Bank')}:</b> <code>{bi.get('bank', '-')}</code>
-<b>{bs('Country')}:</b> <code>{bi.get('country', '-')} {bi.get('flag', '🏳️')}</code>
+<b>╔════════════════════════════════╗</b>
 
-<b>{bs('Took')}</b> ⏱ <code>{elapsed:.2f}{bs('s')}</code>""", he
+💳 <b>{bs('CARD DETAILS')}</b>
+  <code>{card}</code>
+
+📊 <b>{bs('GATEWAY')}</b> ━ <code>{gateway}</code>
+💬 <b>{bs('RESPONSE')}</b> ━ <code>{response}</code>
+💰 <b>{bs('PRICE')}</b> ━ <code>{ps}</code>
+
+🏦 <b>{bs('BIN INFO')}</b>
+  Brand: <code>{bi.get('brand', '-')}</code>
+  Type: <code>{bi.get('type', '-')}</code>
+  Level: <code>{bi.get('level', '-')}</code>
+  Bank: <code>{bi.get('bank', '-')}</code>
+  Country: <code>{bi.get('country', '-')} {bi.get('flag', '🏳️')}</code>
+
+⏱ <b>{bs('Time Taken')}</b>: <code>{elapsed:.2f}s</code>
+<b>╚════════════════════════════════╝</b>""", he
 
 
 def format_card_result_no_price(status, card, gateway, response, bin_info=None):
@@ -609,15 +625,22 @@ def format_card_result_no_price(status, card, gateway, response, bin_info=None):
     h, he = sm.get(status, sm["Declined"])
     bi = bin_info or {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "flag": "🏳️"}
     return f"""{h}
-<b>━━━━━━━━━━━━━━━━━</b>
-<a href='https://t.me/technopile'>⊀</a> <b>{bs('Card')}</b>
-⤷ <code>{card}</code>
-<b>{bs('Gateway')}</b> ━ <code>{gateway}</code>
-<b>{bs('Response')}</b> ━ <code>{response}</code>
-<b>━━━━━━━━━━━━━━━━━</b>
-<b>{bs('BIN')}:</b> <code>{bi.get('brand', '-')} | {bi.get('type', '-')} | {bi.get('level', '-')}</code>
-<b>{bs('Bank')}:</b> <code>{bi.get('bank', '-')}</code>
-<b>{bs('Country')}:</b> <code>{bi.get('country', '-')} {bi.get('flag', '🏳️')}</code>""", he
+<b>╔════════════════════════════════╗</b>
+
+💳 <b>{bs('CARD DETAILS')}</b>
+  <code>{card}</code>
+
+📊 <b>{bs('GATEWAY')}</b> ━ <code>{gateway}</code>
+💬 <b>{bs('RESPONSE')}</b> ━ <code>{response}</code>
+
+🏦 <b>{bs('BIN INFO')}</b>
+  Brand: <code>{bi.get('brand', '-')}</code>
+  Type: <code>{bi.get('type', '-')}</code>
+  Level: <code>{bi.get('level', '-')}</code>
+  Bank: <code>{bi.get('bank', '-')}</code>
+  Country: <code>{bi.get('country', '-')} {bi.get('flag', '🏳️')}</code>
+
+<b>╚════════════════════════════════╝</b>""", he
 
 
 def format_simple_card_result(status, card, gateway, response, bin_info=None, elapsed=0.0, extra_field=None):
@@ -794,17 +817,33 @@ async def send_group_only_message(event):
 
 
 async def send_premium_only_message(event):
-    return await styled_reply(event, f"""{PE} <b>{bs('Premium Only')}</b> {PE}
-<b>━━━━━━━━━━━━━━━━━</b>
-{PE} <b>{bs('This feature requires an active plan')}</b>
-{PE} <i>{bs('Use /plan to see available plans')}</i>""", buttons=[[pbtn(bs("Upgrade"), url="https://t.me/technopile")]], emoji_ids=[CE["stop"], CE["stop"], CE["warn"], CE["info"]])
+    return await styled_reply(event, f"""╔═══════════════════════════════╗
+║ 🔒 {bs('PREMIUM REQUIRED')} 🔒 ║
+╚═══════════════════════════════╝
+
+⚠️ <b>{bs('This feature requires an active plan')}</b>
+
+💡 <b>{bs('What you need:')}</b>
+  ▸ Upgrade to a paid plan
+  ▸ Get access to all features
+  ▸ Enjoy unlimited usage
+
+📌 <b>{bs('Use')}</b> <code>/plan</code> <b>{bs('to see available plans')}</b>""", buttons=[[pbtn(bs("✨ Upgrade Now"), url="https://t.me/technopile")]], emoji_ids=[CE["stop"], CE["stop"], CE["warn"], CE["info"]])
 
 
 def banned_user_message():
-    return f"""{PE} <b>{bs('Banned')}</b> {PE}
-<b>━━━━━━━━━━━━━━━━━</b>
-{PE} <b>{bs('Not allowed')}</b>
-{PE} <b>{bs('Appeal')}:</b> <i>{bs('Contact Admin')}</i>""", [CE["stop"], CE["stop"], CE["warn"], CE["info"]]
+    return f"""╔═══════════════════════════════╗
+║ 🚫 {bs('ACCOUNT BANNED')} 🚫 ║
+╚═══════════════════════════════╝
+
+❌ <b>{bs('You have been banned from using this bot')}</b>
+
+📞 <b>{bs('Appeal Process:')}</b>
+  ▸ Contact: @technopile
+  ▸ Provide: Your User ID & reason
+  ▸ Wait for admin response
+
+⏱️ <b>{bs('Note:')}</b> Appeals are reviewed manually""", [CE["stop"], CE["stop"], CE["warn"], CE["info"]]
 
 
 # ====================== UTILITIES ======================
@@ -1272,42 +1311,53 @@ async def start(event):
             return await styled_reply(event, t, emoji_ids=e)
         plan = await get_user_plan(event.sender_id)
         limit = get_cc_limit(plan, event.sender_id)
+        
+        # Get plan emoji and status
         if is_paid_plan(plan):
             plan_emoji = "🛠️"
             for pi in PLANS.values():
                 if pi["tier"].lower() == plan.lower(): plan_emoji = pi["emoji"]; break
-            sl = f"{PE} <b>{bs('STATUS')}</b> ━ {plan_emoji} <b>{plan.upper()}</b> {PE} (<code>{limit}</code> {bs('Mass Limit')})"
+            status_line = f"{PE} <b>{bs('STATUS')}</b> ━ {plan_emoji} <b>{plan.upper()}</b> {PE} (<code>{limit}</code> {bs('Mass Limit')})"
             se = [CE["star"], CE["crown"]]
         else:
-            sl = f"<b>{bs('STATUS')}</b> ━ 🆓 <b>{plan.upper()}</b> (<code>{FREE_SP_DAILY_LIMIT}/{bs('day')}</code> {bs('in group')})"
+            status_line = f"<b>{bs('STATUS')}</b> ━ 🆓 <b>{plan.upper()}</b> (<code>{FREE_SP_DAILY_LIMIT}/{bs('day')}</code> {bs('in group')})"
             se = []
-        text = f"""{PE} <b><i>{bs('Shopify')}</i></b>
-|   {PE} <code>/sp</code> ━ <b>{bs('Single CC')}</b>
-|   {PE} <code>/msp</code> ━ <b>{bs('Mass CC')}</b>
+        
+        # Build improved menu with better organization
+        text = f"""┏━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ {PE} RAZOR X BOT {PE} ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-{PE} <b><i>{bs('RazorPay')}</i></b>
-|   {PE} <code>/rz</code> ━ <b>{bs('Single CC')}</b>
-|   {PE} <code>/mrz</code> ━ <b>{bs('Mass CC')}</b>
+⚡ <b><i>{bs('SHOPIFY CHECKER')}</i></b>
+  ▸ <code>/sp</code> ━ <b>{bs('Single CC')}</b>
+  ▸ <code>/msp</code> ━ <b>{bs('Mass CC')}</b>
 
-{PE} <b><i>{bs('Sites')}</i></b>
-|   {PE} <code>/add</code> ━ <b>{bs('Add sites')}</b>
-|   {PE} <code>/rm</code> ━ <b>{bs('Remove')}</b>
-|   {PE} <code>/sites</code> ━ <b>{bs('View')}</b>
-|   {PE} <code>/site</code> ━ <b>{bs('Test all')}</b>
+💎 <b><i>{bs('RAZORPAY CHECKER')}</i></b>
+  ▸ <code>/rz</code> ━ <b>{bs('Single CC')}</b>
+  ▸ <code>/mrz</code> ━ <b>{bs('Mass CC')}</b>
 
-{PE} <b><i>{bs('Proxy')}</i></b> ({bs('Private')})
-|   {PE} <code>/addpxy</code> ━ <b>{bs('Add')}</b>
-|   {PE} <code>/proxy</code> ━ <b>{bs('View')}</b>
-|   {PE} <code>/chkpxy</code> ━ <b>{bs('Test')}</b>
-|   {PE} <code>/rmpxy</code> ━ <b>{bs('Remove')}</b>
+📁 <b><i>{bs('SITE MANAGEMENT')}</i></b>
+  ▸ <code>/add</code> ━ <b>{bs('Add sites')}</b>
+  ▸ <code>/sites</code> ━ <b>{bs('View')}</b>
+  ▸ <code>/site</code> ━ <b>{bs('Test all')}</b>
+  ▸ <code>/rm</code> ━ <b>{bs('Remove')}</b>
 
-{PE} <b><i>{bs('Account')}</i></b>
-|   {PE} <code>/info</code> ━ <b>{bs('Profile')}</b>
-|   {PE} <code>/plan</code> ━ <b>{bs('Plans')}</b>
-<b>━━━━━━━━━━━━━━━━━</b>
-{sl}"""
-        kb = [[pbtn(bs("Plans"), data="show_plans"), pbtn(bs("Support"), url="https://t.me/technopile")],
-              [pbtn(bs("Group"), url=JOIN_GROUP_LINK)]]
+🌐 <b><i>{bs('PROXY MANAGEMENT')}</i></b> ({bs('Private')})
+  ▸ <code>/addpxy</code> ━ <b>{bs('Add')}</b>
+  ▸ <code>/proxy</code> ━ <b>{bs('View')}</b>
+  ▸ <code>/chkpxy</code> ━ <b>{bs('Test')}</b>
+  ▸ <code>/rmpxy</code> ━ <b>{bs('Remove')}</b>
+
+👤 <b><i>{bs('ACCOUNT')}</i></b>
+  ▸ <code>/info</code> ━ <b>{bs('Profile')}</b>
+  ▸ <code>/plan</code> ━ <b>{bs('Plans')}</b>
+
+<b>╔═══════════════════════════╗</b>
+{status_line}
+<b>╚═══════════════════════════╝</b>"""
+        
+        kb = [[pbtn(bs("💎 Plans"), data="show_plans"), pbtn(bs("💬 Support"), url="https://t.me/technopile")],
+              [pbtn(bs("👥 Group"), url=JOIN_GROUP_LINK)]]
         ei = [CE["bolt"], CE["search"], CE["pin"], CE["fire"], CE["search"], CE["pin"], CE["brain"], CE["plus"], CE["cross"], CE["globe"], CE["link"], CE["shield"], CE["link"], CE["eyes"], CE["tick"], CE["trash"], CE["info"], CE["info"]] + se
         await styled_reply(event, text, buttons=kb, emoji_ids=ei)
     except Exception as e:
@@ -1333,11 +1383,18 @@ async def check_joined_cb(event):
 async def plans_cb(event):
     cp = await get_user_plan(event.sender_id)
     await event.answer()
-    plans_text = f"""{PE} <b>{bs('Plans')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>"""
+    plans_text = f"""╔═══════════════════════════════╗
+║ 💎 {bs('AVAILABLE PLANS')} 💎 ║
+╚═══════════════════════════════╝"""
     for pid, pi in PLANS.items():
-        plans_text += f"\n{pi['emoji']} <b>{pi['name']}</b> ━ <b>{pi['duration_days']}{bs('d')}</b> ━ <b>{pi['price']}</b>"
-    plans_text += f"\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('Current')}:</b> <b>{cp.upper()}</b>"
-    await styled_send(event.chat_id, plans_text, buttons=[[pbtn(bs("Upgrade"), url="https://t.me/technopile")]], emoji_ids=[CE["fire"], CE["fire"], CE["crown"]])
+        plans_text += f"\n\n{pi['emoji']} <b>{pi['name']}</b>"
+        plans_text += f"\n  Duration: <code>{pi['duration_days']} {bs('days')}</code>"
+        plans_text += f"\n  Price: <code>{pi['price']}</code>"
+        plans_text += f"\n  Tier: <b>{pi['tier'].upper()}</b>"
+    
+    plans_text += f"\n\n{'━' * 30}"
+    plans_text += f"\n📌 <b>{bs('Current Plan')}:</b> <b>{cp.upper()}</b>"
+    await styled_send(event.chat_id, plans_text, buttons=[[pbtn(bs("✨ Upgrade"), url="https://t.me/technopile")]], emoji_ids=[CE["fire"], CE["fire"], CE["crown"]])
 
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]plan$'))
@@ -1347,11 +1404,19 @@ async def show_plans(event):
     if await is_banned_user(event.sender_id):
         t, e = banned_user_message(); return await styled_reply(event, t, emoji_ids=e)
     cp = await get_user_plan(event.sender_id)
-    plans_text = f"""{PE} <b>{bs('Plans')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>"""
+    plans_text = f"""╔═══════════════════════════════╗
+║ 💎 {bs('AVAILABLE PLANS')} 💎 ║
+╚═══════════════════════════════╝"""
     for pid, pi in PLANS.items():
-        plans_text += f"\n{pi['emoji']} <b>{pi['name']}</b> ━ <b>{pi['duration_days']}{bs('d')}</b> ━ <b>{pi['price']}</b>"
-    plans_text += f"""\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('Current')}:</b> <b>{cp.upper()}</b>\n{PE} <i>{bs('Contact admin')}</i>"""
-    await styled_reply(event, plans_text, buttons=[[pbtn(bs("Upgrade"), url="https://t.me/technopile")]], emoji_ids=[CE["fire"], CE["fire"], CE["crown"]])
+        plans_text += f"\n\n{pi['emoji']} <b>{pi['name']}</b>"
+        plans_text += f"\n  Duration: <code>{pi['duration_days']} {bs('days')}</code>"
+        plans_text += f"\n  Price: <code>{pi['price']}</code>"
+        plans_text += f"\n  Tier: <b>{pi['tier'].upper()}</b>"
+    
+    plans_text += f"\n\n{'━' * 30}"
+    plans_text += f"\n📌 <b>{bs('Current Plan')}:</b> <b>{cp.upper()}</b>"
+    plans_text += f"\n{PE} <i>{bs('Contact admin for upgrade')}</i>"""
+    await styled_reply(event, plans_text, buttons=[[pbtn(bs("✨ Upgrade"), url="https://t.me/technopile")]], emoji_ids=[CE["fire"], CE["fire"], CE["crown"]])
 
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]info$'))
@@ -1371,20 +1436,31 @@ async def info_cmd(event):
     expiry = user_doc.get("expiry") if user_doc else None
     exp_str = expiry.strftime('%Y-%m-%d') if expiry else bs("Never")
     status = bs("Active") if is_paid_plan(plan) else bs("Free")
+    status_icon = "✅" if is_paid_plan(plan) else "🆓"
     limit_text = f"<code>{get_cc_limit(plan, event.sender_id)}</code>" if is_paid_plan(plan) else f"<code>{FREE_SP_DAILY_LIMIT}/{bs('day')} ({bs('group')})</code>"
     used_today = get_free_sp_usage(event.sender_id)
     usage_line = ""
     if not is_paid_plan(plan) and event.sender_id not in ADMIN_ID:
-        usage_line = f"\n{PE} <b>{bs('Used Today')}:</b> <code>{used_today}/{FREE_SP_DAILY_LIMIT}</code>"
-    await styled_reply(event, f"""{PE} <b>{bs('Profile')}</b> {PE}
-<b>━━━━━━━━━━━━━━━━━</b>
-{PE} <b>{bs('ID')}:</b> <code>{event.sender_id}</code>
-{PE} <b>{bs('Status')}:</b> <code>{status}</code>
-{PE} <b>{bs('Plan')}:</b> {plan_emoji} <b>{plan.upper()}</b>
-{PE} <b>{bs('Expiry')}:</b> <code>{exp_str}</code>
-{PE} <b>{bs('Limit')}:</b> {limit_text}{usage_line}
-{PE} <b>{bs('Sites')}:</b> <code>{len(sites)}</code>
-{PE} <b>{bs('Proxies')}:</b> <code>{pc}/{bs('100')}</code>""", emoji_ids=[CE["fire"], CE["fire"], CE["info"], CE["star"], CE["crown"], CE["chart"], CE["globe"], CE["link"], CE["shield"]])
+        usage_line = f"\n  ▸ <b>{bs('Used Today')}:</b> <code>{used_today}/{FREE_SP_DAILY_LIMIT}</code>"
+    
+    profile_text = f"""╔════════════════════════════════╗
+║ 👤 {bs('USER PROFILE')} 👤 ║
+╚════════════════════════════════╝
+
+<b>👥 ACCOUNT INFO</b>
+  ▸ <b>ID:</b> <code>{event.sender_id}</code>
+  ▸ <b>Status:</b> {status_icon} <code>{status}</code>
+  ▸ <b>Plan:</b> {plan_emoji} <b>{plan.upper()}</b>
+  ▸ <b>Expiry:</b> 📅 <code>{exp_str}</code>
+
+<b>⚙️ LIMITS & USAGE</b>
+  ▸ <b>Mass Limit:</b> {limit_text}{usage_line}
+  ▸ <b>Sites:</b> 📁 <code>{len(sites)}</code>
+  ▸ <b>Proxies:</b> 🌐 <code>{pc}/100</code>
+
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>"""
+    
+    await styled_reply(event, profile_text, emoji_ids=[CE["fire"], CE["fire"], CE["info"], CE["star"], CE["crown"], CE["chart"], CE["globe"], CE["link"], CE["shield"]])
 
 
 # ====================== SITE MANAGEMENT (same as before - compact) ======================
@@ -1413,7 +1489,18 @@ async def add_site(event):
             for s in extract_urls_from_text(add_text):
                 if s not in sta: sta.append(s)
         if not sta:
-            return await styled_reply(event, f"""{PE} <b>{bs('Add Site')}</b> {PE}\n{PE} <code>/add site.com</code>\n{PE} <i>{bs('Or reply .txt with')} </i><code>/add</code>""", emoji_ids=[CE["fire"], CE["fire"], CE["info"], CE["link"]])
+            return await styled_reply(event, f"""╔═══════════════════════════════╗
+║ 📁 {bs('ADD SITE')} 📁 ║
+╚═══════════════════════════════╝
+
+<b>Usage:</b>
+  ▸ <code>/add site.com</code>
+  ▸ Reply to .txt file with <code>/add</code>
+
+<b>Examples:</b>
+  ▸ amazon.com
+  ▸ ebay.co.uk
+  ▸ shop.example.com""", emoji_ids=[CE["fire"], CE["fire"], CE["info"], CE["link"]])
         existing_norm = {normalize_site_url(s) for s in await get_user_sites(event.sender_id)}
         new_sites, already_exists = [], []
         for site in sta:
@@ -1421,14 +1508,27 @@ async def add_site(event):
             if n in existing_norm: already_exists.append(n)
             elif n not in [normalize_site_url(s) for s in new_sites]: new_sites.append(n)
         if not new_sites:
-            return await styled_reply(event, f"""{PE} <b>{bs('All sites already exist')}</b> {PE}\n{PE} <b>{bs('Duplicates')}:</b> <code>{len(already_exists)}</code>""", emoji_ids=[CE["warn"], CE["warn"], CE["info"]])
+            return await styled_reply(event, f"""⚠️ <b>{bs('Duplicates Found')}</b>
+
+{PE} <b>{bs('All sites already exist')}</b>
+{PE} <b>{bs('Duplicates')}:</b> <code>{len(already_exists)}</code>""", emoji_ids=[CE["warn"], CE["warn"], CE["info"]])
         uid = event.sender_id
         PENDING_ADD_SITES[uid] = {"sites": new_sites, "exists": already_exists, "event": event}
-        kb = [[pbtn(f"{bs('0-5 USD')}", f"addprice:5:{uid}"), pbtn(f"{bs('0-10 USD')}", f"addprice:10:{uid}")],
-              [pbtn(f"{bs('0-20 USD')}", f"addprice:20:{uid}"), pbtn(f"{bs('0-40 USD')}", f"addprice:40:{uid}")]]
-        await styled_reply(event, f"""{PE} <b>{bs('Select Price Range')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('New Sites')}:</b> <code>{len(new_sites)}</code>\n{PE} <b>{bs('Already Exist')}:</b> <code>{len(already_exists)}</code>\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <i>{bs('Only working sites within price range will be added')}</i>""", buttons=kb, emoji_ids=[CE["fire"], CE["fire"], CE["globe"], CE["warn"], CE["info"]])
+        kb = [[pbtn(f"💵 {bs('0-5 USD')}", f"addprice:5:{uid}"), pbtn(f"💵 {bs('0-10 USD')}", f"addprice:10:{uid}")],
+              [pbtn(f"💵 {bs('0-20 USD')}", f"addprice:20:{uid}"), pbtn(f"💵 {bs('0-40 USD')}", f"addprice:40:{uid}")]]
+        await styled_reply(event, f"""╔═══════════════════════════════╗
+║ 💎 {bs('SELECT PRICE RANGE')} 💎 ║
+╚═══════════════════════════════╝
+
+📊 <b>{bs('Summary')}</b>
+  ▸ <b>New Sites:</b> <code>{len(new_sites)}</code>
+  ▸ <b>Already Exist:</b> <code>{len(already_exists)}</code>
+
+💡 <b>Note:</b>
+  Only working sites within the selected price range will be added.""", buttons=kb, emoji_ids=[CE["fire"], CE["fire"], CE["globe"], CE["warn"], CE["info"]])
     except Exception as e:
-        await styled_reply(event, f"{PE} <b>{bs('Error')}:</b> <code>{e}</code>", emoji_ids=[CE["cross"]])
+        await styled_reply(event, f"""❌ <b>{bs('Error')}</b>
+<code>{str(e)[:100]}</code>""", emoji_ids=[CE["cross"]])
 
 
 @client.on(events.CallbackQuery(pattern=rb"addprice:(\d+):(\d+)"))
