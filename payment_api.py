@@ -280,6 +280,9 @@ def confirm_payment_page(
     session_id: str,
     user_agent: str,
 ) -> Dict[str, Any]:
+    
+    amount = 100
+
     """
     Step 2: Confirm the payment page/checkout session
     """
@@ -427,11 +430,11 @@ async def process_payment(request: PaymentRequestModel) -> PaymentResponseModel:
         # Determine outcome based on card number (for testing)
         status, error_code = determine_payment_outcome(request.card.number)
         
-        # Create payment record
+        # Create payment record (amount hardcoded to 100 cents = $1)
         payment_record = {
             "payment_id": payment_id,
             "status": status,
-            "amount": request.amount,
+            "amount": 100,
             "currency": request.currency,
             "card_type": card_type,
             "card_last4": card_last4,
@@ -453,7 +456,7 @@ async def process_payment(request: PaymentRequestModel) -> PaymentResponseModel:
         return PaymentResponseModel(
             payment_id=payment_id,
             status=status,
-            amount=request.amount / 100,  # Convert to dollars
+            amount=1.0,  # Hardcoded to $1 (100 cents)
             currency=request.currency,
             card_type=card_type,
             card_last4=card_last4,
@@ -501,7 +504,7 @@ async def get_payment_status(payment_id: str) -> PaymentStatusResponseModel:
     return PaymentStatusResponseModel(
         payment_id=payment_id,
         status=record["status"],
-        amount=record["amount"] / 100,
+        amount=1.0,  # Hardcoded to $1 (100 cents)
         currency=record["currency"],
         card_last4=record["card_last4"],
         timestamp=record["timestamp"],

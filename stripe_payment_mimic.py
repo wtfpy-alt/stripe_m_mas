@@ -882,7 +882,7 @@ def step_3_check_payment_intent(intent_id: str, client_secret: str, user_agent: 
             "id": intent_id,
             "status": "requires_payment_method" if payment_error.get('code') == 'card_declined' else "requires_action",
             "last_payment_error": payment_error,
-            "amount": int(amount),
+            "amount": 100,
             "currency": "usd"
         }
     
@@ -1095,8 +1095,8 @@ def process_payment_with_card(card_number: str, exp_month: int, exp_year: int, c
     if amount:
         print(f"✓ Using amount: {amount} (${int(amount)/100:.2f})")
     else:
-        print(f"⚠️  Could not extract amount, using fallback: 130313")
-        amount = "130313"
+        print(f"⚠️  Could not extract amount, using fallback: 100 (hardcoded to $1)")
+        amount = "100"
     
     # Step 1: Create payment method
     payment_method = step_1_create_payment_method(random_values, pk_live_key)
@@ -1164,7 +1164,7 @@ def process_payment_with_card(card_number: str, exp_month: int, exp_year: int, c
         "payment_method_id": payment_method_id,
         "card_type": random_values['card_type'],
         "card_last4": card_number[-4:],
-        "amount": final_intent.get('amount', 0) / 100,
+        "amount": 1.0,  # Hardcoded to $1 (100 cents)
         "currency": final_intent.get('currency', 'usd').upper(),
         "error_code": error_obj.get('code') if error_obj else None,
         "error_message": error_obj.get('message') if error_obj else None,
